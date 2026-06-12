@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'; // Added for ScrollDirection
 import 'package:google_fonts/google_fonts.dart';
 import 'tasks.dart';
 import 'yield.dart';
@@ -12,7 +13,8 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> with SingleTickerProviderStateMixin {
+class _DashboardPageState extends State<DashboardPage>
+    with SingleTickerProviderStateMixin {
   // Aquatic Color Palette
   final Color tealLight = const Color(0xFFE6FFF9);
   final Color teal = const Color(0xFF0D9488);
@@ -21,17 +23,15 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   final Color warningRed = const Color(0xFFDC2626);
   final Color textDark = const Color(0xFF1F2937);
   final Color textMuted = const Color(0xFF6B7280);
-  
+
+  int _currentNavIndex = 0;
   bool _showNotificationDropdown = false;
-  late GlobalKey<ScaffoldState> _scaffoldKey;
+  bool _isNavBarVisible = true; // State for nav bar visibility
   late AnimationController _fadeController;
 
   @override
   void initState() {
     super.initState();
-    _scaffoldKey = GlobalKey<ScaffoldState>();
-    
-    // Kept only the initial load fade for a smooth entry, removing heavy continuous animations
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -44,114 +44,184 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     super.dispose();
   }
 
+  void _onNavTapped(int index) {
+    if (index == _currentNavIndex) return;
+    setState(() {
+      _currentNavIndex = index;
+      // Ensure nav bar is visible when switching tabs
+      _isNavBarVisible = true; 
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF3F4F6), // Light gray background for contrast
-      drawer: _buildSidebar(context),
+      backgroundColor: const Color(0xFFF3F4F6),
+      extendBody: true, // Allows content to scroll behind the bottom nav bar
       appBar: _buildTopBar(context),
-      body: FadeTransition(
-        opacity: Tween<double>(begin: 0, end: 1).animate(
-          CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
+      
+      // ── MAIN CONTENT AREA WITH SCROLL LISTENER ─────────────────────────
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification notification) {
+          if (notification is UserScrollNotification) {
+            // User dragging up, content moving down -> hide nav bar
+            if (notification.direction == ScrollDirection.reverse) {
+              if (_isNavBarVisible) {
+                setState(() => _isNavBarVisible = false);
+              }
+            } 
+            // User dragging down, content moving up -> show nav bar
+            else if (notification.direction == ScrollDirection.forward) {
+              if (!_isNavBarVisible) {
+                setState(() => _isNavBarVisible = true);
+              }
+            }
+          }
+          
+          // Re-show nav bar when user hits the very bottom of the page
+          if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 20) {
+            if (!_isNavBarVisible) {
+              setState(() => _isNavBarVisible = true);
+            }
+          }
+          
+          return false; // Let the notification bubble up
+        },
+        child: Stack(
+          children: [
+            IndexedStack(
+              index: _currentNavIndex,
+              children: [
+                _buildDashboardView(), // Index 0: Dashboard
+                const TasksPage(),     // Index 1: Gawain
+                const YieldEstimationPage(), // Index 2: Ani
+                const LogsPage(),      // Index 3: Logs
+              ],
+            ),
+
+            // Notification dropdown overlay
+            if (_showNotificationDropdown)
+              Positioned(
+                top: 0,
+                right: 12,
+                child: _buildNotificationDropdown(),
+              ),
+          ],
         ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Greeting
-              Text(
-                "Magandang Araw!",
-                style: GoogleFonts.poppins(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: textDark,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "Narito ang buod ng iyong Bantay Ulang system ngayon.",
-                style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  color: textMuted,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-              const SizedBox(height: 24),
+      ),
 
-              // Main Status Card - Solid bold color for instant status recognition
-              _buildStatusCard(),
-              const SizedBox(height: 24),
+      // ── ANIMATED BOTTOM NAVIGATION BAR ─────────────────────────────────
+      bottomNavigationBar: AnimatedSlide(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+        // Slide out (down) if not visible, stay at 0 if visible
+        offset: _isNavBarVisible ? Offset.zero : const Offset(0, 1.0),
+        child: _buildBottomNavBar(),
+      ),
+    );
+  }
 
-              // Urgent Tasks Section - Moved up so it's impossible to miss
-              _buildUrgentTasksSection(),
-              const SizedBox(height: 24),
+  // ── DASHBOARD TAB CONTENT ──────────────────────────────────────────────
+  Widget _buildDashboardView() {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0, end: 1).animate(
+        CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
+      ),
+      child: SingleChildScrollView(
+        // The 100px bottom padding ensures content isn't permanently hidden behind the floating nav bar
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Greeting
+            Text(
+              "Magandang Araw!",
+              style: GoogleFonts.poppins(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: textDark,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Narito ang buod ng iyong Bantay Ulang system ngayon.",
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                color: textMuted,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            const SizedBox(height: 24),
 
-              // Yield Prediction Section
-              _buildYieldSection(),
-              const SizedBox(height: 24),
+            _buildStatusCard(),
+            const SizedBox(height: 24),
 
-              // Water Conditions
-              Text(
-                "Kondisyon ng Tubig",
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: textDark,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildConditionCard(
-                Icons.water_drop,
-                "Temperatura",
-                "Tamang-tama para sa paglaki ng ulang.",
-                "KATAMTAMAN",
-                teal,
-              ),
-              const SizedBox(height: 12),
-              _buildConditionCard(
-                Icons.check_circle,
-                "Linis ng Tubig",
-                "Walang nakitang lason o dumi.",
-                "MAAYOS",
-                teal,
-              ),
-              const SizedBox(height: 12),
-              _buildConditionCard(
-                Icons.air,
-                "Hangin (Oxygen)",
-                "May sapat na hangin para sa mga ulang.",
-                "MATAAS",
-                teal,
-              ),
-              const SizedBox(height: 24),
+            _buildUrgentTasksSection(),
+            const SizedBox(height: 24),
 
-              // Plant Status Section
-              Text(
-                "Status ng mga Tanim",
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: textDark,
-                ),
+            _buildYieldSection(),
+            const SizedBox(height: 24),
+
+            // Water Conditions
+            Text(
+              "Kondisyon ng Tubig",
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: textDark,
               ),
-              const SizedBox(height: 12),
-              _buildConditionCard(
-                Icons.eco,
-                "Mga Halaman",
-                "Malusog at patuloy na lumalaki.",
-                "MAAYOS",
-                const Color(0xFF10B981), // Green for plants
+            ),
+            const SizedBox(height: 12),
+            _buildConditionCard(
+              Icons.thermostat,
+              "Temperatura",
+              "Tamang-tama para sa paglaki ng ulang.",
+              "KATAMTAMAN",
+              teal,
+            ),
+            const SizedBox(height: 12),
+            _buildConditionCard(
+              Icons.water_drop,
+              "Linis ng Tubig",
+              "Walang nakitang lason o dumi.",
+              "MAAYOS",
+              teal,
+            ),
+            const SizedBox(height: 12),
+            _buildConditionCard(
+              Icons.air,
+              "Hangin (Oxygen)",
+              "May sapat na hangin para sa mga ulang.",
+              "MATAAS",
+              teal,
+            ),
+            const SizedBox(height: 24),
+
+            // Plant Status
+            Text(
+              "Status ng mga Tanim",
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: textDark,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            _buildConditionCard(
+              Icons.eco,
+              "Mga Halaman",
+              "Malusog at patuloy na lumalaki.",
+              "MAAYOS",
+              const Color(0xFF10B981),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  // ── TOP BAR (no hamburger) ─────────────────────────────────────────────
   PreferredSizeWidget _buildTopBar(BuildContext context) {
     return PreferredSize(
       preferredSize: const Size.fromHeight(65),
@@ -168,35 +238,46 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                IconButton(
-                  icon: Icon(Icons.menu, color: textDark, size: 28),
-                  onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                  tooltip: 'Buksan ang menu',
+                // App logo / icon
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: tealLight,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: teal, width: 1.5),
+                  ),
+                  child: Icon(Icons.water_drop, color: tealDark, size: 20),
                 ),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Center(
-                    child: Text(
-                      "Bantay Ulang",
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: tealDark,
-                      ),
+                  child: Text(
+                    "Bantay Ulang",
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: tealDark,
                     ),
                   ),
                 ),
+
                 // Notifications
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
                     IconButton(
-                      icon: Icon(Icons.notifications_none, color: textDark, size: 28),
+                      icon: Icon(
+                        Icons.notifications_none,
+                        color: textDark,
+                        size: 28,
+                      ),
                       onPressed: () {
                         setState(() {
-                          _showNotificationDropdown = !_showNotificationDropdown;
+                          _showNotificationDropdown =
+                              !_showNotificationDropdown;
                         });
                       },
                     ),
@@ -215,18 +296,21 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     ),
                   ],
                 ),
+
                 // Profile Avatar
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const ProfilePage()),
+                      MaterialPageRoute(
+                        builder: (context) => const ProfilePage(),
+                      ),
                     );
                   },
                   child: Container(
                     width: 40,
                     height: 40,
-                    margin: const EdgeInsets.only(left: 8),
+                    margin: const EdgeInsets.only(left: 4),
                     decoration: BoxDecoration(
                       color: tealLight,
                       shape: BoxShape.circle,
@@ -244,7 +328,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
               ],
             ),
           ),
@@ -253,6 +336,172 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     );
   }
 
+  // ── BOTTOM NAV BAR ─────────────────────────────────────────────────────
+  Widget _buildBottomNavBar() {
+    const navItems = [
+      (Icons.home_rounded, Icons.home_outlined, "Dashboard"),
+      (Icons.assignment_turned_in_rounded, Icons.assignment_outlined, "Gawain"),
+      (Icons.show_chart_rounded, Icons.show_chart_outlined, "Ani"),
+      (Icons.list_alt_rounded, Icons.list_alt_outlined, "Logs"),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(navItems.length, (i) {
+              final isActive = i == _currentNavIndex;
+              final (activeIcon, inactiveIcon, label) = navItems[i];
+              return _buildNavItem(
+                activeIcon: activeIcon,
+                inactiveIcon: inactiveIcon,
+                label: label,
+                isActive: isActive,
+                onTap: () => _onNavTapped(i),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required IconData activeIcon,
+    required IconData inactiveIcon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? tealLight : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isActive ? activeIcon : inactiveIcon,
+              color: isActive ? tealDark : textMuted,
+              size: 26,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                color: isActive ? tealDark : textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── NOTIFICATION DROPDOWN ──────────────────────────────────────────────
+  Widget _buildNotificationDropdown() {
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.withOpacity(0.15)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Mga Abiso",
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: textDark,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildNotifItem(
+              Icons.assignment_late,
+              "Ulang Data Capture — URGENT",
+              "Kailangang gawin bago mag-March 06.",
+              warningRed,
+            ),
+            const Divider(height: 16),
+            _buildNotifItem(
+              Icons.water_drop,
+              "Temperatura — Normal",
+              "Wala pang pagbabago sa kondisyon.",
+              teal,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotifItem(
+    IconData icon,
+    String title,
+    String subtitle,
+    Color color,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: textDark,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── CONTENT WIDGETS ────────────────────────────────────────────────────
   Widget _buildStatusCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -416,7 +665,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: warningRed,
                             borderRadius: BorderRadius.circular(6),
@@ -443,10 +695,11 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     const SizedBox(height: 12),
                     GestureDetector(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const TasksPage()),
-                        );
+                        // Switch directly to the Tasks page via IndexedStack
+                        setState(() {
+                          _currentNavIndex = 1;
+                          _isNavBarVisible = true; // Ensure nav bar stays visible when jumping
+                        });
                       },
                       child: Text(
                         "Tingnan ang gawain →",
@@ -604,109 +857,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Drawer _buildSidebar(BuildContext context) {
-    return Drawer(
-      backgroundColor: const Color(0xFF1F2937), // Dark grey for high contrast sidebar
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.water_drop, color: tealLight, size: 28),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Bantay Ulang",
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                children: [
-                  _buildNavLink(Icons.home, "Dashboard", context, isActive: true),
-                  _buildNavLink(Icons.assignment_turned_in, "Mga Gawain", context, page: const TasksPage()),
-                  _buildNavLink(Icons.show_chart, "Inaasahang Ani", context, page: const YieldEstimationPage()),
-                  _buildNavLink(Icons.list, "Logs & Record", context, page: const LogsPage()),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: _buildNavLink(Icons.logout, "Mag-Log out", context, isLogout: true),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavLink(
-    IconData icon,
-    String title,
-    BuildContext context, {
-    Widget? page,
-    bool isActive = false,
-    bool isLogout = false,
-  }) {
-    final color = isLogout ? warningRed : (isActive ? tealLight : Colors.white70);
-    
-    return Material(
-      color: isActive ? Colors.white.withOpacity(0.05) : Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.pop(context);
-          if (isLogout) {
-            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-          } else if (page != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => page),
-            );
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: isActive ? tealLight : Colors.transparent,
-                width: 4,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 16),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  color: color,
-                  fontSize: 16,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
