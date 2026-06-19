@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'landing_page.dart'; // Adjust if this should point to your dashboard
-import 'yield.dart';
-import 'logs.dart';
-import 'profile.dart';
+import 'logs.dart'; // Kept for your Task Card onTap navigation
 
 class TasksPage extends StatefulWidget {
   const TasksPage({super.key});
@@ -23,7 +20,6 @@ class _TasksPageState extends State<TasksPage> with SingleTickerProviderStateMix
   final Color textDark = const Color(0xFF1F2937);
   final Color textMuted = const Color(0xFF6B7280);
 
-  late GlobalKey<ScaffoldState> _scaffoldKey;
   late AnimationController _fadeController;
 
   List<Map<String, dynamic>> tasks = [
@@ -39,8 +35,6 @@ class _TasksPageState extends State<TasksPage> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    _scaffoldKey = GlobalKey<ScaffoldState>();
-    
     // Quick, snappy fade transition instead of continuous loops
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 600),
@@ -102,16 +96,16 @@ class _TasksPageState extends State<TasksPage> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
       backgroundColor: const Color(0xFFF3F4F6), // Light gray background for contrast
-      drawer: _buildSidebar(context),
-      appBar: _buildTopBar(context),
+      // REMOVED: appBar and drawer to prevent duplication inside the Dashboard shell
+      
       body: FadeTransition(
         opacity: Tween<double>(begin: 0, end: 1).animate(
           CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+          // ADDED: 100px bottom padding so content scrolls above the bottom nav bar
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -164,81 +158,8 @@ class _TasksPageState extends State<TasksPage> with SingleTickerProviderStateMix
     );
   }
 
-  PreferredSizeWidget _buildTopBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(65),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.menu, color: textDark, size: 28),
-                  onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                  tooltip: 'Buksan ang menu',
-                ),
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      "Bantay Ulang",
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: tealDark,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ProfilePage()),
-                    );
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: tealLight,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: teal, width: 1.5),
-                    ),
-                    child: Center(
-                      child: Text(
-                        "JD",
-                        style: TextStyle(
-                          color: tealDark,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildTaskCard(Map<String, dynamic> task, int index) {
     final bool isDone = task["status"] == "done";
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -257,6 +178,8 @@ class _TasksPageState extends State<TasksPage> with SingleTickerProviderStateMix
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: () {
+            // Note: This pushes a new LogsPage on top. If you want it to switch tabs 
+            // instead, you will need to pass a callback from DashboardPage.
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const LogsPage()),
@@ -443,7 +366,7 @@ class _TasksPageState extends State<TasksPage> with SingleTickerProviderStateMix
           ),
           const SizedBox(height: 8),
           Text(
-            "Maari kang magpahinga muna. Abangan ang susunod na ia-assign ng admin.",
+            "Maari kang magpahinga muna.\nAbangan ang susunod na ia-assign ng admin.",
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 14,
@@ -455,110 +378,4 @@ class _TasksPageState extends State<TasksPage> with SingleTickerProviderStateMix
       ),
     );
   }
-
-  Drawer _buildSidebar(BuildContext context) {
-    return Drawer(
-      backgroundColor: const Color(0xFF1F2937),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.water_drop, color: tealLight, size: 28),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Bantay Ulang",
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                children: [
-                  // Note: Assuming 'landing_page.dart' contains DashboardPage based on your imports.
-                  // If Dashboard is in a different file, adjust accordingly.
-                  _buildNavLink(Icons.home, "Dashboard", context, page: const DashboardPage()), 
-                  _buildNavLink(Icons.assignment_turned_in, "Mga Gawain", context, isActive: true),
-                  _buildNavLink(Icons.show_chart, "Inaasahang Ani", context, page: const YieldEstimationPage()),
-                  _buildNavLink(Icons.list, "Logs & Record", context, page: const LogsPage()),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: _buildNavLink(Icons.logout, "Mag-Log out", context, isLogout: true),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavLink(
-    IconData icon,
-    String title,
-    BuildContext context, {
-    Widget? page,
-    bool isActive = false,
-    bool isLogout = false,
-  }) {
-    final color = isLogout ? warningRed : (isActive ? tealLight : Colors.white70);
-    
-    return Material(
-      color: isActive ? Colors.white.withOpacity(0.05) : Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.pop(context); // Close Drawer
-          if (isLogout) {
-            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-          } else if (page != null && !isActive) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => page),
-            );
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: isActive ? tealLight : Colors.transparent,
-                width: 4,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 16),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  color: color,
-                  fontSize: 16,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
-

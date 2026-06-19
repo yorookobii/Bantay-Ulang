@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'landing_page.dart';
-import 'tasks.dart';
-import 'logs.dart';
-import 'profile.dart';
 
 class YieldEstimationPage extends StatefulWidget {
   const YieldEstimationPage({super.key});
@@ -22,7 +18,6 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
   final Color textMuted = const Color(0xFF6B7280);
   final Color successGreen = const Color(0xFF10B981);
 
-  late GlobalKey<ScaffoldState> _scaffoldKey;
   late AnimationController _fadeController;
   
   bool _isRecalculating = false;
@@ -30,14 +25,11 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
   // Dummy Data for Logic Transparency
   final double estimatedYieldKg = 55.0;
   final double marketPricePerKg = 500.0;
-  
   double get estimatedRevenue => estimatedYieldKg * marketPricePerKg;
 
   @override
   void initState() {
     super.initState();
-    _scaffoldKey = GlobalKey<ScaffoldState>();
-    
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -55,13 +47,14 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
     setState(() {
       _isRecalculating = true;
     });
-    
+
     await Future.delayed(const Duration(seconds: 2));
     
     if (mounted) {
       setState(() {
         _isRecalculating = false;
       });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -82,10 +75,9 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
       backgroundColor: const Color(0xFFF3F4F6),
-      drawer: _buildSidebar(context),
-      appBar: _buildTopBar(context),
+      // REMOVED: appBar and drawer to prevent duplication inside the Dashboard shell
+      
       body: FadeTransition(
         opacity: Tween<double>(begin: 0, end: 1).animate(
           CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
@@ -95,7 +87,8 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
           color: teal,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+            // ADDED: 100px bottom padding so content scrolls above the bottom nav bar
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -159,6 +152,7 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
                   ],
                 ),
                 const SizedBox(height: 12),
+                
                 // Market Price Factor taking full width for emphasis
                 _buildFactorCard(
                   "Kasalukuyang Presyo sa Merkado", 
@@ -172,77 +166,6 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
                 _buildSectionTitle(Icons.lightbulb, "Status at Rekomendasyon"),
                 const SizedBox(height: 12),
                 _buildRecommendationCard(),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildTopBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(65),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.menu, color: textDark, size: 28),
-                  onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                ),
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      "Bantay Ulang",
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: tealDark,
-                      ),
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ProfilePage()),
-                    );
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: tealLight,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: teal, width: 1.5),
-                    ),
-                    child: Center(
-                      child: Text(
-                        "JD",
-                        style: TextStyle(
-                          color: tealDark,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -269,7 +192,7 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
     );
   }
 
-  // UPDATED: Combined Yield and Revenue Card
+  // Combined Yield and Revenue Card
   Widget _buildMainYieldAndRevenueCard() {
     return Container(
       width: double.infinity,
@@ -532,7 +455,6 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
         ],
       ),
     );
-
     return isFullWidth ? cardContent : Expanded(child: cardContent);
   }
 
@@ -581,109 +503,6 @@ class _YieldEstimationPageState extends State<YieldEstimationPage> with SingleTi
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Drawer _buildSidebar(BuildContext context) {
-    return Drawer(
-      backgroundColor: const Color(0xFF1F2937),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.water_drop, color: tealLight, size: 28),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Bantay Ulang",
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                children: [
-                  _buildNavLink(Icons.home, "Dashboard", context, page: const DashboardPage()),
-                  _buildNavLink(Icons.assignment_turned_in, "Mga Gawain", context, page: const TasksPage()),
-                  _buildNavLink(Icons.show_chart, "Inaasahang Ani", context, isActive: true),
-                  _buildNavLink(Icons.list, "Logs & Record", context, page: const LogsPage()),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: _buildNavLink(Icons.logout, "Mag-Log out", context, isLogout: true),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavLink(
-    IconData icon,
-    String title,
-    BuildContext context, {
-    Widget? page,
-    bool isActive = false,
-    bool isLogout = false,
-  }) {
-    final color = isLogout ? const Color(0xFFDC2626) : (isActive ? tealLight : Colors.white70);
-    
-    return Material(
-      color: isActive ? Colors.white.withOpacity(0.05) : Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.pop(context);
-          if (isLogout) {
-            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-          } else if (page != null && !isActive) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => page),
-            );
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: isActive ? tealLight : Colors.transparent,
-                width: 4,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 16),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  color: color,
-                  fontSize: 16,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

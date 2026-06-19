@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 import 'package:google_fonts/google_fonts.dart';
-import 'landing_page.dart';
-import 'tasks.dart';
-import 'yield.dart';
-import 'profile.dart';
 
 class LogsPage extends StatefulWidget {
   const LogsPage({super.key});
@@ -22,7 +18,6 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   final Color textDark = const Color(0xFF1F2937);
   final Color textMuted = const Color(0xFF6B7280);
 
-  late GlobalKey<ScaffoldState> _scaffoldKey;
   late AnimationController _fadeController;
 
   // Mock Data Storage
@@ -44,8 +39,6 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _scaffoldKey = GlobalKey<ScaffoldState>();
-    
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -69,27 +62,66 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
     return double.tryParse(weight.replaceAll(RegExp(r'[^\d.]'), '')) ?? 0;
   }
 
-  List<Map<String, dynamic>> getWeightByLast7Days() {
+  // UPDATED: Groups data into 4 Weekly Buckets to avoid overwhelming users
+  List<Map<String, dynamic>> getWeeklyWeightData() {
     DateTime now = DateTime.now();
     List<Map<String, dynamic>> data = [];
 
-    for (int i = 6; i >= 0; i--) {
-      DateTime day = now.subtract(Duration(days: i));
+    // Generates data for the last 4 weeks (1 month trend)
+    for (int i = 3; i >= 0; i--) {
+      // End date of this specific 7-day period
+      DateTime weekEnd = now.subtract(Duration(days: i * 7));
+      // Start date of this specific 7-day period
+      DateTime weekStart = weekEnd.subtract(const Duration(days: 6));
+      
       double total = 0;
 
       for (var log in ulangLogs) {
         DateTime d = log['date'];
-        if (d.year == day.year && d.month == day.month && d.day == day.day) {
+        // Check if the log's date falls within this week's 7-day chunk
+        if (d.isAfter(weekStart.subtract(const Duration(days: 1))) && 
+            d.isBefore(weekEnd.add(const Duration(days: 1)))) {
           total += parseWeight(log['weight']);
         }
       }
 
       data.add({
-        'label': "${day.month}/${day.day}",
+        // Labels the chart with the start date of the week (e.g., 6/19, 6/26)
+        'label': "${weekStart.month}/${weekStart.day}",
         'total': total,
       });
     }
     return data;
+  }
+
+  Future<void> _selectDate(BuildContext context, bool isUlang) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: isUlang ? selectedDate : plantDate,
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: teal,
+              onPrimary: Colors.white,
+              onSurface: textDark,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        if (isUlang) {
+          selectedDate = picked;
+        } else {
+          plantDate = picked;
+        }
+      });
+    }
   }
 
   void _showSuccessSnackbar(String message) {
@@ -118,10 +150,24 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        key: _scaffoldKey,
         backgroundColor: const Color(0xFFF3F4F6),
-        drawer: _buildSidebar(context),
-        appBar: _buildTopBar(context),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 1,
+          shadowColor: Colors.black.withOpacity(0.1),
+          toolbarHeight: 0, 
+          bottom: TabBar(
+            indicatorColor: teal,
+            indicatorWeight: 3,
+            labelColor: tealDark,
+            unselectedLabelColor: textMuted,
+            labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
+            tabs: const <Widget>[
+              Tab(text: "Tala ng Ulang"),
+              Tab(text: "Tala ng Tanim"),
+            ],
+          ),
+        ),
         body: FadeTransition(
           opacity: Tween<double>(begin: 0, end: 1).animate(
             CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
@@ -141,34 +187,30 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   // Ulang Tab UI
   // =======================
   Widget _buildUlangTab() {
-    final weekData = getWeightByLast7Days();
-    final maxWeight = weekData.map((e) => e['total'] as double).fold(0.0, max);
+    final weeklyData = getWeeklyWeightData();
+    final maxWeight = weeklyData.map((e) => e['total'] as double).fold(0.0, max);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader("Tala ng Ulang", "I-record ang sukat at timbang ng mga ulang."),
           const SizedBox(height: 24),
 
-          // Statistics
           _statCard("Kabuuang Tala", ulangLogs.length.toString(), Icons.pets),
           const SizedBox(height: 24),
 
-          // Weekly Chart
           _buildSectionTitle("Lingguhang Timbang"),
           const SizedBox(height: 12),
-          _buildChartCard(weekData, maxWeight),
+          _buildChartCard(weeklyData, maxWeight),
           const SizedBox(height: 24),
 
-          // Data Entry Form
-          _buildSectionTitle("Magdagdag ng Tala (Log)"),
+          _buildSectionTitle("Magdagdag ng Tala"),
           const SizedBox(height: 12),
           _buildUlangForm(),
           const SizedBox(height: 24),
 
-          // Logs List
           if (ulangLogs.isNotEmpty) ...[
             _buildSectionTitle("Mga Nakaraang Tala"),
             const SizedBox(height: 12),
@@ -184,24 +226,21 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   // =======================
   Widget _buildPlantTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader("Tala ng Tanim", "I-record ang paglaki at kondisyon ng mga halaman."),
           const SizedBox(height: 24),
 
-          // Statistics
           _statCard("Kabuuang Tala", plantLogs.length.toString(), Icons.eco),
           const SizedBox(height: 24),
 
-          // Data Entry Form
-          _buildSectionTitle("Magdagdag ng Tala (Log)"),
+          _buildSectionTitle("Magdagdag ng Tala"),
           const SizedBox(height: 12),
           _buildPlantForm(),
           const SizedBox(height: 24),
 
-          // Logs List
           if (plantLogs.isNotEmpty) ...[
             _buildSectionTitle("Mga Nakaraang Tala"),
             const SizedBox(height: 12),
@@ -215,92 +254,6 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   // =======================
   // Component Widgets
   // =======================
-  PreferredSizeWidget _buildTopBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(115), // Extended height for TabBar
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.menu, color: textDark, size: 28),
-                      onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          "Bantay Ulang",
-                          style: GoogleFonts.poppins(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: tealDark,
-                          ),
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const ProfilePage()),
-                        );
-                      },
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: tealLight,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: teal, width: 1.5),
-                        ),
-                        child: Center(
-                          child: Text(
-                            "JD",
-                            style: TextStyle(
-                              color: tealDark,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              TabBar(
-                indicatorColor: teal,
-                indicatorWeight: 3,
-                labelColor: tealDark,
-                unselectedLabelColor: textMuted,
-                labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
-                tabs: const [
-                  Tab(text: "Tala ng Ulang"),
-                  Tab(text: "Tala ng Tanim"),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildHeader(String title, String subtitle) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,16 +343,17 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
     );
   }
 
-  Widget _buildChartCard(List<Map<String, dynamic>> weekData, double maxWeight) {
+  // UPDATED: Removed horizontal scroll. Displays a clean, stacked list of weeks.
+  Widget _buildChartCard(List<Map<String, dynamic>> weeklyData, double maxWeight) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.withOpacity(0.2)),
       ),
       child: Column(
-        children: weekData.map((d) {
+        children: weeklyData.map((d) {
           double pct = maxWeight > 0 ? d['total'] / maxWeight : 0;
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -425,7 +379,7 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
                     ),
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
-                      widthFactor: pct > 0 ? pct : 0.01, // Give a tiny width even if 0 for visuals
+                      widthFactor: pct > 0 ? pct : 0.01,
                       child: Container(
                         decoration: BoxDecoration(
                           color: pct > 0 ? teal : Colors.transparent,
@@ -466,6 +420,21 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
       ),
       child: Column(
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Petsa: ${selectedDate.month}/${selectedDate.day}/${selectedDate.year}",
+                style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500, color: textDark),
+              ),
+              TextButton.icon(
+                onPressed: () => _selectDate(context, true),
+                icon: Icon(Icons.calendar_month, color: teal, size: 20),
+                label: Text("Palitan", style: GoogleFonts.poppins(color: teal, fontWeight: FontWeight.w600)),
+              )
+            ],
+          ),
+          const SizedBox(height: 12),
           _buildInputField(sizeController, "Laki (cm)", keyboardType: TextInputType.number),
           const SizedBox(height: 16),
           _buildInputField(weightController, "Bigat (g)", keyboardType: TextInputType.number),
@@ -499,6 +468,21 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
       ),
       child: Column(
         children: [
+           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Petsa: ${plantDate.month}/${plantDate.day}/${plantDate.year}",
+                style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500, color: textDark),
+              ),
+              TextButton.icon(
+                onPressed: () => _selectDate(context, false),
+                icon: Icon(Icons.calendar_month, color: teal, size: 20),
+                label: Text("Palitan", style: GoogleFonts.poppins(color: teal, fontWeight: FontWeight.w600)),
+              )
+            ],
+          ),
+          const SizedBox(height: 12),
           _buildCustomDropdown(
             value: selectedPlantName,
             hint: "Pumili ng uri ng tanim",
@@ -557,7 +541,7 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   Widget _buildSaveButton(String text, VoidCallback onPressed) {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 54, 
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
@@ -568,7 +552,7 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
         child: Text(
           text,
           style: GoogleFonts.poppins(
-            fontSize: 15,
+            fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Colors.white,
           ),
@@ -580,7 +564,7 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   Widget _buildInputField(TextEditingController controller, String label, {TextInputType keyboardType = TextInputType.text}) {
     return TextField(
       controller: controller,
-      keyboardType: keyboardType, // Crucial for UX on numbers
+      keyboardType: keyboardType, 
       style: GoogleFonts.poppins(fontSize: 15, color: textDark),
       decoration: InputDecoration(
         labelText: label,
@@ -599,6 +583,7 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
         ),
         filled: true,
         fillColor: const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18), 
       ),
     );
   }
@@ -632,6 +617,7 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
         ),
         filled: true,
         fillColor: const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       ),
       items: items,
       onChanged: onChanged,
@@ -640,6 +626,9 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   }
 
   Widget _buildUlangLogCard(Map<String, dynamic> log) {
+    DateTime d = log['date'];
+    String formattedDate = "${d.month}/${d.day}/${d.year}";
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -651,26 +640,40 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: seaBlue.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.pets, color: seaBlue, size: 24),
+            child: Icon(Icons.pets, color: seaBlue, size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Laki: ${log['size']} cm",
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: textDark,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Laki: ${log['size']} cm",
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: textDark,
+                      ),
+                    ),
+                    Text(
+                      formattedDate,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: teal,
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 4),
                 Text(
                   "Timbang: ${log['weight']} g",
                   style: GoogleFonts.poppins(
@@ -687,6 +690,9 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
   }
 
   Widget _buildPlantLogCard(Map<String, dynamic> log) {
+    DateTime d = log['date'];
+    String formattedDate = "${d.month}/${d.day}/${d.year}";
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -698,149 +704,62 @@ class _LogsPageState extends State<LogsPage> with SingleTickerProviderStateMixin
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withOpacity(0.1), // Green for plants
+              color: const Color(0xFF10B981).withOpacity(0.1), 
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.eco, color: Color(0xFF10B981), size: 24),
+            child: const Icon(Icons.eco, color: Color(0xFF10B981), size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  log['name'] ?? "Tanim",
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: textDark,
-                  ),
+                Row(
+                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      log['name'] ?? "Tanim",
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: textDark,
+                      ),
+                    ),
+                    Text(
+                      formattedDate,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF10B981),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   "Taas: ${log['height']}cm • Yugto: ${log['stage'] ?? '-'}",
                   style: GoogleFonts.poppins(
-                    fontSize: 13,
+                    fontSize: 14,
                     color: textMuted,
                   ),
                 ),
                 if (log['condition'] != null && log['condition']!.isNotEmpty)
-                  Text(
-                    "Kondisyon: ${log['condition']}",
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      color: textMuted,
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      "Kondisyon: ${log['condition']}",
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: textMuted,
+                      ),
                     ),
                   ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Drawer _buildSidebar(BuildContext context) {
-    return Drawer(
-      backgroundColor: const Color(0xFF1F2937),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.water_drop, color: tealLight, size: 28),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Bantay Ulang",
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                children: [
-                  _buildNavLink(Icons.home, "Dashboard", context, page: const DashboardPage()),
-                  _buildNavLink(Icons.assignment_turned_in, "Mga Gawain", context, page: const TasksPage()),
-                  _buildNavLink(Icons.show_chart, "Inaasahang Ani", context, page: const YieldEstimationPage()),
-                  _buildNavLink(Icons.list, "Logs & Record", context, isActive: true),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1))),
-              ),
-              child: _buildNavLink(Icons.logout, "Mag-Log out", context, isLogout: true),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavLink(
-    IconData icon,
-    String title,
-    BuildContext context, {
-    Widget? page,
-    bool isActive = false,
-    bool isLogout = false,
-  }) {
-    final color = isLogout ? const Color(0xFFDC2626) : (isActive ? tealLight : Colors.white70);
-    
-    return Material(
-      color: isActive ? Colors.white.withOpacity(0.05) : Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.pop(context); 
-          if (isLogout) {
-            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-          } else if (page != null && !isActive) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => page),
-            );
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(
-                color: isActive ? tealLight : Colors.transparent,
-                width: 4,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 16),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  color: color,
-                  fontSize: 16,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
